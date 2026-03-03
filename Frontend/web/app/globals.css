@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Bottom sheet slide-up animation */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* User marker pulse */
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@layer base {
+  :root {
+    --color-primary: 17 24 39; /* Gray-900 #111827 */
+    --color-accent: 55 65 81; /* Gray-700 #374151 */
+    --color-background: 248 250 252; /* Slate-50 #F8FAFC */
+    --color-surface: 255 255 255;
+    --color-text-primary: 15 23 42; /* Slate-900 #0F172A */
+    --color-text-secondary: 100 116 139; /* Slate-500 #64748B */
+    --color-success: 16 185 129;
+    --color-danger: 239 68 68;
+    --color-border: 229 231 235;
+  }
+
+  * {
+    @apply border-[rgb(var(--color-border))];
+  }
+
+  body {
+    @apply bg-[rgb(var(--color-background))] text-[rgb(var(--color-text-primary))] font-sans antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
