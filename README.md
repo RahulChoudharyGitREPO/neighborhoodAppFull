@@ -177,48 +177,6 @@ npm run dev
 
 ---
 
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-```env
-NODE_ENV=development
-PORT=5000
-
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/neighbourhood
-
-# JWT
-JWT_ACCESS_SECRET=your-access-secret
-JWT_REFRESH_SECRET=your-refresh-secret
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=7d
-
-# Cloudinary (image uploads)
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-
-# Geospatial
-DEFAULT_RADIUS_KM=2.5
-MIN_RADIUS_KM=0.1
-MAX_RADIUS_KM=5
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-
-# Security
-BCRYPT_SALT_ROUNDS=12
-OTP_EXPIRY_MINUTES=10
-```
-
-### Frontend (`Frontend/web/.env.local`)
-
-```env
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
-```
-
 ---
 
 ## API Documentation
@@ -283,18 +241,6 @@ Interactive Swagger docs are available at `http://localhost:5000/docs` when the 
 All location-based models use MongoDB **2dsphere** indexes for efficient geospatial queries.
 
 ---
-
-## Security
-
-- **JWT Authentication** — Short-lived access tokens (15 min) with long-lived refresh tokens (7 days) stored in HttpOnly cookies.
-- **Password Hashing** — bcryptjs with 12 salt rounds.
-- **Helmet.js** — Secure HTTP headers.
-- **CORS** — Configurable allowed origins.
-- **Rate Limiting** — 100 requests per 15-minute window.
-- **Email & Phone Verification** — OTP-based verification flow.
-- **Audit Logging** — All user actions are tracked with IP and user-agent.
-- **User Blocking** — Block unwanted users; blocked users are excluded from search results.
-- **Input Validation** — Server-side Joi validation on every endpoint; client-side Zod schemas.
 
 ---
 
