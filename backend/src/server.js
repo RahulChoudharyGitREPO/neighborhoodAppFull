@@ -43,7 +43,7 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
-  origin: config.ws.cors_origin,
+  origin: config.ws.cors_origin.split(',').map(s => s.trim()),
   credentials: true,
 }));
 
@@ -118,16 +118,12 @@ app.use(errorHandler);
 const PORT = config.port;
 
 server.listen(PORT, () => {
-  console.log('');
-  console.log('===========================================');
-  console.log(`  Neighborhood Helper API`);
-  console.log('===========================================');
+  
   console.log(`  Environment: ${config.node_env}`);
   console.log(`  Server:      ${config.api_url}`);
   console.log(`  Docs:        ${config.api_url}/docs`);
   console.log(`  WebSocket:   ${config.api_url}/ws`);
-  console.log('===========================================');
-  console.log('');
+ 
 });
 
 // Graceful shutdown
