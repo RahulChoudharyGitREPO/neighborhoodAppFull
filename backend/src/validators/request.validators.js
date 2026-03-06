@@ -31,6 +31,8 @@ const searchRequestsSchema = Joi.object({
   lat: Joi.number().min(-90).max(90).required(),
   radiusKm: Joi.number().min(0.5).max(50000).default(2.5),
   category: Joi.string().valid('errands', 'moving', 'repairs', 'gardening', 'tech', 'tutoring', 'other'),
+  search: Joi.string().trim().max(200),
+  sort: Joi.string().valid('distance', 'date', 'urgency').default('distance'),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
 });

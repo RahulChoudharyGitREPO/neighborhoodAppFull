@@ -17,6 +17,22 @@ const {
   sendMessageSchema,
   getMessagesSchema,
 } = require('../validators/match.validators');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const config = require('../config/env');
+
+// Configure multer for chat attachments (max 10MB, images + PDFs)
+const chatUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images and PDFs are allowed'), false);
+    }
+  },
+});
 
 /**
  * POST /matches
@@ -349,6 +365,15 @@ router.patch('/:id/status', authenticate, validate(updateMatchStatusSchema), asy
       await Request.findByIdAndUpdate(match.requestId, { status: 'completed' });
     }
 
+    // Notify other participant via socket
+    const otherUserId = match.requesterId.equals(req.user.userId) ? match.helperId : match.requesterId;
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${otherUserId}`).emit('match:status', {
+        matchId: match._id, status: match.status, updatedBy: req.user.userId,
+      });
+    }
+
     // Log action
     await logAction(req.user.userId, 'match.status.update', req, { matchId: match._id, status });
 
@@ -359,6 +384,79 @@ router.patch('/:id/status', authenticate, validate(updateMatchStatusSchema), asy
       startedAt: match.startedAt,
       endedAt: match.endedAt,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /matches/:id/accept
+ * Requester accepts a pending match
+ */
+router.patch('/:id/accept', authenticate, async (req, res, next) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    // Only requester can accept
+    if (!match.requesterId.equals(req.user.userId)) {
+      return res.status(403).json({ error: 'Only the requester can accept a match' });
+    }
+    if (match.status !== 'pending') {
+      return res.status(400).json({ error: 'Match is not pending' });
+    }
+
+    await match.updateStatus('active');
+    await Request.findByIdAndUpdate(match.requestId, { status: 'matched' });
+
+    // Auto-reject other pending matches for same request
+    await Match.updateMany(
+      { requestId: match.requestId, _id: { $ne: match._id }, status: 'pending' },
+      { $set: { status: 'cancelled' } }
+    );
+
+    // Emit socket event
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${match.helperId}`).emit('match:status', {
+        matchId: match._id, status: 'active', updatedBy: req.user.userId,
+      });
+    }
+
+    await logAction(req.user.userId, 'match.accept', req, { matchId: match._id });
+    res.json({ id: match._id, status: match.status });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /matches/:id/decline
+ * Requester declines a pending match
+ */
+router.patch('/:id/decline', authenticate, async (req, res, next) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    if (!match.requesterId.equals(req.user.userId)) {
+      return res.status(403).json({ error: 'Only the requester can decline a match' });
+    }
+    if (match.status !== 'pending') {
+      return res.status(400).json({ error: 'Match is not pending' });
+    }
+
+    await match.updateStatus('cancelled');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${match.helperId}`).emit('match:status', {
+        matchId: match._id, status: 'cancelled', updatedBy: req.user.userId,
+      });
+    }
+
+    await logAction(req.user.userId, 'match.decline', req, { matchId: match._id });
+    res.json({ id: match._id, status: match.status });
   } catch (error) {
     next(error);
   }
@@ -498,9 +596,13 @@ router.post('/threads/:threadId/read', authenticate, async (req, res, next) => {
  * POST /threads/:id/messages
  * Send a message in a thread
  */
-router.post('/threads/:threadId/messages', authenticate, validate(sendMessageSchema), async (req, res, next) => {
+router.post('/threads/:threadId/messages', authenticate, chatUpload.array('files', 5), async (req, res, next) => {
   try {
-    const { body, attachments } = req.body;
+    const { body } = req.body;
+
+    if (!body || !body.trim()) {
+      return res.status(400).json({ error: 'Message body is required' });
+    }
 
     const thread = await Thread.findById(req.params.threadId);
 
@@ -513,12 +615,30 @@ router.post('/threads/:threadId/messages', authenticate, validate(sendMessageSch
       return res.status(403).json({ error: 'Not authorized to send messages in this thread' });
     }
 
+    // Upload attachments to Cloudinary if files provided
+    let attachments = [];
+    if (req.files && req.files.length > 0 && config.cloudinary.cloud_name) {
+      const uploadPromises = req.files.map((file) => {
+        return new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: 'chat_attachments', resource_type: 'auto' },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve({ url: result.secure_url, type: file.mimetype, publicId: result.public_id });
+            }
+          );
+          stream.end(file.buffer);
+        });
+      });
+      attachments = await Promise.all(uploadPromises);
+    }
+
     // Create message
     const message = await Message.create({
       threadId: thread._id,
       senderId: req.user.userId,
       body,
-      attachments: attachments || [],
+      attachments,
     });
 
     // Update thread last message time

@@ -2,17 +2,19 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Send, CheckCircle, XCircle, MapPin } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, XCircle, MapPin, Star, Paperclip, X, FileText, Share2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import Avatar from "@/components/ui/avatar";
 import Button from "@/components/ui/button";
+import Badge from "@/components/ui/badge";
 import Input from "@/components/ui/input";
 import api, { endpoints, API_BASE_URL } from "@/lib/api";
 import { useUserStore } from "@/store/useUserStore";
-import { Message, ChatThread, Match } from "@/types";
+import { Message, ChatThread, Match, Request } from "@/types";
 import { formatTime } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { io, Socket } from "socket.io-client";
+import RatingFormModal from "@/components/shared/rating-form-modal";
 
 export default function ChatPage() {
   const params = useParams();
@@ -24,10 +26,27 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [hasRated, setHasRated] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [userRequests, setUserRequests] = useState<Request[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  // Check if already rated
+  useEffect(() => {
+    if (match) {
+      const matchId = match.id || match._id;
+      if (matchId && localStorage.getItem(`rated_${matchId}`)) {
+        setHasRated(true);
+      }
+    }
+  }, [match]);
 
   useEffect(() => {
     if (params.threadId) {
@@ -218,22 +237,75 @@ export default function ChatPage() {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles((prev) => [...prev, ...files].slice(0, 5));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || isSending) return;
 
     const messageContent = newMessage;
+    const filesToSend = [...selectedFiles];
     setNewMessage("");
+    setSelectedFiles([]);
     setIsSending(true);
 
     try {
-      await api.post(endpoints.messages(params.threadId as string), {
-        body: messageContent, // Changed from 'content' to 'body' to match backend validator
-      });
-      // Message will be received via WebSocket
+      if (filesToSend.length > 0) {
+        const formData = new FormData();
+        formData.append("body", messageContent);
+        filesToSend.forEach((file) => formData.append("files", file));
+        await api.post(endpoints.messages(params.threadId as string), formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await api.post(endpoints.messages(params.threadId as string), {
+          body: messageContent,
+        });
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to send message");
-      setNewMessage(messageContent); // Restore message on error
+      setNewMessage(messageContent);
+      setSelectedFiles(filesToSend);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleShareRequest = async () => {
+    setShowShareModal(true);
+    if (userRequests.length === 0) {
+      setLoadingRequests(true);
+      try {
+        const response = await api.get(endpoints.myRequests, { params: { status: "open" } });
+        const reqs = response.data.requests || response.data.data || [];
+        setUserRequests(reqs);
+      } catch {
+        toast.error("Failed to load your requests");
+      } finally {
+        setLoadingRequests(false);
+      }
+    }
+  };
+
+  const sendSharedRequest = async (req: Request) => {
+    const reqId = req.id || req._id;
+    const shareMessage = `📋 Shared a request: "${req.title}" [${req.category}]\n👉 /requests/${reqId}`;
+    setShowShareModal(false);
+    setIsSending(true);
+    try {
+      await api.post(endpoints.messages(params.threadId as string), {
+        body: shareMessage,
+      });
+    } catch (error: any) {
+      toast.error("Failed to share request");
     } finally {
       setIsSending(false);
     }
@@ -308,8 +380,57 @@ export default function ChatPage() {
               </p>
             )}
           </div>
+          <button
+            onClick={handleShareRequest}
+            className="text-gray-500 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            title="Share a request"
+          >
+            <Share2 className="h-5 w-5" />
+          </button>
         </div>
       </div>
+
+      {/* Share Request Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowShareModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Share a Request</h3>
+              <button onClick={() => setShowShareModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-3">
+              {loadingRequests ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400" />
+                </div>
+              ) : userRequests.length === 0 ? (
+                <p className="text-center text-sm text-gray-500 py-8">No open requests to share</p>
+              ) : (
+                <div className="space-y-2">
+                  {userRequests.map((req) => {
+                    const reqId = req.id || req._id;
+                    return (
+                      <button
+                        key={reqId}
+                        onClick={() => sendSharedRequest(req)}
+                        className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="warning">{req.category}</Badge>
+                          <span className="text-xs text-gray-400">{req.status}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Accept/Reject Banner (for requester when match is pending) */}
       {match && match.status === "pending" && (
@@ -407,12 +528,48 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* Completed Match - Rating Banner */}
+      {match && match.status === "completed" && !hasRated && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-4">
+          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-500" />
+                <h3 className="font-semibold text-gray-900">Match completed!</h3>
+              </div>
+              <p className="text-sm text-gray-600 mt-0.5">
+                How was your experience? Leave a rating to help the community.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowRatingModal(true)}
+              className="bg-yellow-600 hover:bg-yellow-700"
+            >
+              <Star className="h-4 w-4 mr-1" />
+              Rate Experience
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 py-6">
           {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <div className="space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className={`flex ${i % 2 === 0 ? "justify-start" : "justify-end"}`}>
+                  <div className={`flex gap-2 max-w-[60%] ${i % 2 === 0 ? "" : "flex-row-reverse"}`}>
+                    {i % 2 === 0 && <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse shrink-0" />}
+                    <div className="space-y-1">
+                      <div className={`h-10 rounded-2xl bg-gray-200 animate-pulse ${i % 3 === 0 ? "w-48" : i % 3 === 1 ? "w-64" : "w-36"}`} />
+                      <div className={`h-3 w-12 bg-gray-100 animate-pulse rounded ${i % 2 !== 0 ? "ml-auto" : ""}`} />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : messages.length === 0 ? (
             <div className="text-center py-16">
@@ -458,7 +615,41 @@ export default function ChatPage() {
                               : "bg-gray-100 text-gray-800"
                           }`}
                         >
-                          <p className="text-sm">{message.body || message.content}</p>
+                          <p className="text-sm whitespace-pre-wrap">
+                            {(() => {
+                              const text = message.body || message.content || "";
+                              const linkMatch = text.match(/\/requests\/([a-f0-9]+)/);
+                              if (linkMatch) {
+                                const parts = text.split(linkMatch[0]);
+                                return (
+                                  <>
+                                    {parts[0]}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); router.push(`/requests/${linkMatch[1]}`); }}
+                                      className={`underline font-medium ${isOwnMessage ? "text-blue-300 hover:text-blue-200" : "text-blue-600 hover:text-blue-800"}`}
+                                    >
+                                      View Request
+                                    </button>
+                                    {parts[1]}
+                                  </>
+                                );
+                              }
+                              return text;
+                            })()}
+                          </p>
+                          {message.attachments && message.attachments.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {message.attachments.map((att: any, i: number) => (
+                                att.type?.startsWith("image/") ? (
+                                  <img key={i} src={att.url} alt="attachment" className="max-w-[200px] rounded-lg cursor-pointer" onClick={() => window.open(att.url, "_blank")} />
+                                ) : (
+                                  <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-1 text-xs underline ${isOwnMessage ? "text-gray-300" : "text-blue-600"}`}>
+                                    <FileText className="h-3 w-3" /> Attachment
+                                  </a>
+                                )
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <p className={`text-xs text-gray-500 mt-1 ${isOwnMessage ? "text-right" : "text-left"}`}>
                           {formatTime(message.createdAt)}
@@ -477,7 +668,29 @@ export default function ChatPage() {
       {/* Input */}
       <div className="bg-white border-t border-gray-200 px-4 py-4">
         <div className="max-w-4xl mx-auto">
+          {selectedFiles.length > 0 && (
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {selectedFiles.map((file, i) => (
+                <div key={i} className="relative group">
+                  {file.type.startsWith("image/") ? (
+                    <img src={URL.createObjectURL(file)} alt="" className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
+                  ) : (
+                    <div className="h-16 w-16 flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+                      <FileText className="h-6 w-6 text-gray-400" />
+                    </div>
+                  )}
+                  <button onClick={() => removeFile(i)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <form onSubmit={handleSendMessage} className="flex gap-3">
+            <input ref={fileInputRef} type="file" multiple accept="image/*,application/pdf" onChange={handleFileSelect} className="hidden" />
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 transition-colors self-center">
+              <Paperclip className="h-5 w-5" />
+            </button>
             <input
               type="text"
               value={newMessage}
@@ -498,6 +711,25 @@ export default function ChatPage() {
           </form>
         </div>
       </div>
+
+      {/* Rating Modal */}
+      {match && (
+        <RatingFormModal
+          isOpen={showRatingModal}
+          onClose={() => {
+            setShowRatingModal(false);
+            setHasRated(true);
+          }}
+          matchId={(match.id || match._id) as string}
+          toUserId={(() => {
+            const userId = user?._id || user?.id;
+            const requesterId = typeof match.requesterId === "string" ? match.requesterId : (match.requesterId as any)?._id;
+            const helperId = typeof match.helperId === "string" ? match.helperId : (match.helperId as any)?._id;
+            return requesterId === userId ? helperId : requesterId;
+          })()}
+          toUserName="your partner"
+        />
+      )}
     </div>
   );
 }

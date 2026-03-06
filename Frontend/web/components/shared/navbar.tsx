@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Heart, LogOut, User, MessageCircle, Menu, X, Pencil } from "lucide-react";
+import { Heart, LogOut, User, MessageCircle, Menu, X, Pencil, Shield, BookmarkIcon, Users } from "lucide-react";
 import Avatar from "@/components/ui/avatar";
+import NotificationBell from "@/components/shared/notification-bell";
 import { useUserStore } from "@/store/useUserStore";
 import { cn } from "@/lib/utils";
 import api, { endpoints } from "@/lib/api";
@@ -78,7 +79,8 @@ export default function Navbar() {
   };
 
   // Don't show navbar on auth pages
-  if (pathname === "/login" || pathname === "/register") {
+  const authPages = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
+  if (authPages.includes(pathname)) {
     return null;
   }
 
@@ -101,6 +103,9 @@ export default function Navbar() {
           {isAuthenticated && user ? (
             <>
               <div className="hidden md:flex items-center space-x-4">
+                {/* Notifications */}
+                <NotificationBell />
+
                 {/* Inbox link */}
                 <Link
                   href="/inbox"
@@ -183,6 +188,29 @@ export default function Navbar() {
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit Profile
                     </Link>
+                    <Link
+                      href="/friends"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Friends
+                    </Link>
+                    <Link
+                      href="/favorites"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <BookmarkIcon className="h-4 w-4 mr-2" />
+                      Favorites
+                    </Link>
+                    {user.role === "admin" && (
+                      <Link
+                        href="/admin"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Shield className="h-4 w-4 mr-2" />
+                        Admin Dashboard
+                      </Link>
+                    )}
                     <div className="border-t border-gray-100 mt-1 pt-1">
                       <button
                         onClick={handleLogout}
@@ -237,6 +265,13 @@ export default function Navbar() {
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
+          </Link>
+          <Link
+            href="/friends"
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50"
+          >
+            <Users className="h-5 w-5 text-gray-600" />
+            <span className="text-sm font-medium text-gray-900">Friends</span>
           </Link>
           <Link
             href="/profile"

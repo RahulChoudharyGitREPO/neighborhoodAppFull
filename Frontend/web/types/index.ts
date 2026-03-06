@@ -23,7 +23,7 @@ export interface User {
   radius?: number; // in meters
   radiusKm?: number;
   skills?: string[];
-  role?: "helper" | "requester" | "both" | null;
+  role?: "helper" | "requester" | "both" | "admin" | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -225,4 +225,94 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   hasMore: boolean;
+}
+
+// Rating types
+export interface Rating {
+  id: string;
+  _id?: string;
+  from: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  to?: {
+    id: string;
+    displayName: string;
+  };
+  matchId: string;
+  stars: number;
+  comment?: string;
+  createdAt: string;
+}
+
+export interface RatingSummary {
+  averageRating: number;
+  totalRatings: number;
+}
+
+export interface RatingFormData {
+  stars: number;
+  comment?: string;
+}
+
+// Notification types
+export interface AppNotification {
+  id: string;
+  type: "new_match" | "new_message" | "helper_arriving" | "match_completed" | "rating_received";
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  read: boolean;
+  createdAt: string;
+}
+
+// Favorite types
+export interface Favorite {
+  id: string;
+  _id?: string;
+  userId: string;
+  requestId?: string;
+  offerId?: string;
+  request?: Request;
+  offer?: Offer;
+  createdAt: string;
+}
+
+// Friend types
+export interface Friend {
+  id: string;
+  displayName: string;
+  avatarUrl: string;
+  bio: string;
+  skills: string[];
+  userRole: string | null;
+  relationship: "helper" | "requester" | "both";
+  matchCount: number;
+  lastMatchId: string;
+  lastMatchStatus: string;
+  lastRequest?: {
+    id: string;
+    title: string;
+    category: string;
+  };
+  lastInteraction: string;
+}
+
+export interface FriendMatch {
+  id: string;
+  requestTitle: string;
+  category: string;
+  status: string;
+  chatThreadId: string | null;
+  createdAt: string;
+}
+
+// Admin types
+export interface AdminStats {
+  userCount: number;
+  requestCount: number;
+  offerCount: number;
+  matchCount: number;
+  activeUsers: number;
 }

@@ -95,6 +95,7 @@ export const endpoints = {
 
   // Requests
   requests: "/requests",
+  myRequests: "/requests/mine",
   requestById: (id: string) => `/requests/${id}`,
   nearbyRequests: "/requests/nearby",
 
@@ -124,9 +125,40 @@ export const endpoints = {
   updateProfile: "/me/profile",
   uploadAvatar: "/me/avatar",
 
+  // Ratings
+  ratings: "/ratings",
+  userRatings: (userId: string) => `/ratings/${userId}`,
+
+  // Password reset
+  requestPasswordReset: "/auth/request-password-reset",
+  confirmPasswordReset: "/auth/confirm-password-reset",
+
+  // Privacy
+  updatePrivacy: "/me/privacy",
+  blockedUsers: "/me/privacy/blocked",
+
   // Admin
+  adminStats: "/admin/stats",
   adminUsers: "/admin/users",
-  adminReports: "/admin/reports",
+  adminUserById: (id: string) => `/admin/users/${id}`,
+  adminRequests: "/admin/requests",
+  adminRequestById: (id: string) => `/admin/requests/${id}`,
+  adminOffers: "/admin/offers",
+  adminOfferById: (id: string) => `/admin/offers/${id}`,
+
+  // Favorites
+  favorites: "/favorites",
+
+  // Verification
+  verifyEmail: "/verify/email",
+
+  // Match actions
+  acceptMatch: (id: string) => `/matches/${id}/accept`,
+  declineMatch: (id: string) => `/matches/${id}/decline`,
+
+  // Friends
+  friends: "/friends",
+  friendMatches: (friendId: string) => `/friends/${friendId}/matches`,
 
   // Health check
   health: "/health",

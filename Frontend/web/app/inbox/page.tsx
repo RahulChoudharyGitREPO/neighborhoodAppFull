@@ -6,6 +6,7 @@ import { MessageCircle, ArrowLeft, User } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import Avatar from "@/components/ui/avatar";
 import Badge from "@/components/ui/badge";
+import { InboxSkeleton } from "@/components/ui/skeleton";
 import api from "@/lib/api";
 import { useUserStore } from "@/store/useUserStore";
 import { Match } from "@/types";
@@ -110,9 +111,7 @@ export default function InboxPage() {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-          </div>
+          <InboxSkeleton />
         ) : matches.length === 0 ? (
           <Card className="p-12 text-center">
             <MessageCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />

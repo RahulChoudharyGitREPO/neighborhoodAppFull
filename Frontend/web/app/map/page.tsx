@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, List, X, MapPin, Clock, Tag, ChevronRight, Wrench, HandHelping } from "lucide-react";
+import { Plus, List, X, MapPin, Clock, Tag, ChevronRight, Wrench, HandHelping, Heart } from "lucide-react";
 import Button from "@/components/ui/button";
 import Avatar from "@/components/ui/avatar";
 import RatingStars from "@/components/shared/rating-stars";
+import SearchFilters from "@/components/shared/search-filters";
 import { cn } from "@/lib/utils";
 import api, { endpoints } from "@/lib/api";
 import { useUserStore } from "@/store/useUserStore";
@@ -68,6 +69,12 @@ export default function MapPage() {
   const markersRef = useRef<any[]>([]);
   // For "both" role: which tab is active
   const [activeView, setActiveView] = useState<"helpers" | "requests">("helpers");
+  // Search/filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [sortBy, setSortBy] = useState("distance");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   const userRole = user?.role;
   // Determine what to show based on role
@@ -78,6 +85,47 @@ export default function MapPage() {
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  // Fetch user's favorites to show heart state
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get(endpoints.favorites).then((res) => {
+        const favs = res.data.favorites || [];
+        const ids = new Set<string>();
+        favs.forEach((f: any) => {
+          if (f.requestId) ids.add(String(f.requestId));
+          if (f.offerId) ids.add(String(f.offerId));
+        });
+        setFavoriteIds(ids);
+      }).catch(() => {});
+    }
+  }, [isAuthenticated]);
+
+  const favLockRef = useRef<Set<string>>(new Set());
+  const toggleFavorite = async (e: React.MouseEvent, itemId: string, type: "request" | "offer") => {
+    e.stopPropagation();
+    if (favLockRef.current.has(itemId)) return; // prevent duplicate calls
+    favLockRef.current.add(itemId);
+    try {
+      const body = type === "request" ? { requestId: itemId } : { offerId: itemId };
+      const res = await api.post(endpoints.favorites, body);
+      const favorited = res.data.favorited;
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (favorited) {
+          next.add(itemId);
+        } else {
+          next.delete(itemId);
+        }
+        return next;
+      });
+      toast.success(favorited ? "Added to favorites" : "Removed from favorites");
+    } catch {
+      toast.error("Failed to update favorites");
+    } finally {
+      favLockRef.current.delete(itemId);
+    }
+  };
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -177,9 +225,10 @@ export default function MapPage() {
   };
 
   const fetchRequests = async (lng: number, lat: number) => {
-    const response = await api.get(endpoints.requests, {
-      params: { lng, lat, radiusKm: 50000 }
-    });
+    const params: Record<string, any> = { lng, lat, radiusKm: 50000, sort: sortBy };
+    if (searchQuery) params.search = searchQuery;
+    if (categoryFilter) params.category = categoryFilter;
+    const response = await api.get(endpoints.requests, { params });
     const fetchedRequests = response.data.requests || response.data.data || response.data;
     setRequests(fetchedRequests);
     if (showRequests) {
@@ -188,14 +237,33 @@ export default function MapPage() {
   };
 
   const fetchOffers = async (lng: number, lat: number) => {
-    const response = await api.get(endpoints.offers, {
-      params: { lng, lat, radiusKm: 50000 }
-    });
+    const params: Record<string, any> = { lng, lat, radiusKm: 50000, sort: sortBy };
+    if (searchQuery) params.search = searchQuery;
+    const response = await api.get(endpoints.offers, { params });
     const fetchedOffers = response.data.offers || response.data.data || response.data;
     setOffers(fetchedOffers);
     if (showHelpers) {
       addOfferMarkers(fetchedOffers);
     }
+  };
+
+  // Re-fetch when filters change (debounced for search)
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      if (user?.home) fetchData();
+    }, 300);
+  };
+
+  const handleCategoryChange = (category: string) => {
+    setCategoryFilter(category);
+    setTimeout(() => { if (user?.home) fetchData(); }, 0);
+  };
+
+  const handleSortChange = (sort: string) => {
+    setSortBy(sort);
+    setTimeout(() => { if (user?.home) fetchData(); }, 0);
   };
 
   const addRequestMarkers = async (reqs: Request[]) => {
@@ -499,6 +567,15 @@ export default function MapPage() {
                 </button>
               </div>
             )}
+
+            {/* Search & Filters */}
+            <SearchFilters
+              viewType="requests"
+              onSearch={handleSearchChange}
+              onCategoryChange={handleCategoryChange}
+              onSortChange={handleSortChange}
+              className="mt-2.5"
+            />
           </div>
 
           {/* Request Cards */}
@@ -589,6 +666,12 @@ export default function MapPage() {
                             {request.timeNeeded || request.whenTime}
                           </span>
                         )}
+                        <button
+                          onClick={(e) => toggleFavorite(e, reqId!, "request")}
+                          className="p-0.5 hover:scale-110 transition-transform"
+                        >
+                          <Heart className={cn("h-3.5 w-3.5", favoriteIds.has(reqId!) ? "fill-red-500 text-red-500" : "text-gray-300 hover:text-red-400")} />
+                        </button>
                         <ChevronRight className="h-3 w-3" />
                       </div>
                     </div>
@@ -656,12 +739,20 @@ export default function MapPage() {
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowBottomSheet(false)}
-                  className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={(e) => toggleFavorite(e, (selectedOffer.id || selectedOffer._id)!, "offer")}
+                    className="p-2 rounded-xl hover:bg-red-50 transition-colors"
+                  >
+                    <Heart className={cn("h-5 w-5", favoriteIds.has((selectedOffer.id || selectedOffer._id)!) ? "fill-red-500 text-red-500" : "text-gray-400 hover:text-red-400")} />
+                  </button>
+                  <button
+                    onClick={() => setShowBottomSheet(false)}
+                    className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Skills */}
@@ -739,12 +830,20 @@ export default function MapPage() {
                     {selectedRequest.category}
                   </span>
                 </div>
-                <button
-                  onClick={() => setShowBottomSheet(false)}
-                  className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={(e) => toggleFavorite(e, (selectedRequest.id || selectedRequest._id)!, "request")}
+                    className="p-2 rounded-xl hover:bg-red-50 transition-colors"
+                  >
+                    <Heart className={cn("h-5 w-5", favoriteIds.has((selectedRequest.id || selectedRequest._id)!) ? "fill-red-500 text-red-500" : "text-gray-400 hover:text-red-400")} />
+                  </button>
+                  <button
+                    onClick={() => setShowBottomSheet(false)}
+                    className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
               {sheetUser && (

@@ -415,6 +415,24 @@ router.post('/phone/confirm', authenticate, validate(updatePhoneConfirmSchema), 
 });
 
 /**
+ * GET /me/privacy/blocked
+ * Get blocked users list
+ */
+router.get('/privacy/blocked', authenticate, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.userId).populate('privacy.blockedUsers', 'displayName avatarUrl');
+    const blockedUsers = (user.privacy.blockedUsers || []).map(u => ({
+      id: u._id,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+    }));
+    res.json({ blockedUsers });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * PATCH /me/privacy
  * Update privacy settings
  */

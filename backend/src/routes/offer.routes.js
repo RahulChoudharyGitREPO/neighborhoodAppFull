@@ -57,12 +57,21 @@ router.post('/', authenticate, validate(createOfferSchema), async (req, res, nex
  */
 router.get('/', authenticate, validateQuery(searchOffersSchema), async (req, res, next) => {
   try {
-    const { lng, lat, radiusKm, skill, page, limit } = req.query;
+    const { lng, lat, radiusKm, skill, skills, search, sort, page, limit } = req.query;
 
     // Build additional filters
     const additionalFilters = {};
     if (skill) {
       additionalFilters.skills = skill;
+    }
+    if (skills) {
+      const skillsArray = Array.isArray(skills) ? skills : [skills];
+      additionalFilters.skills = { $all: skillsArray };
+    }
+    if (search) {
+      additionalFilters.$or = [
+        { skills: { $regex: search, $options: 'i' } },
+      ];
     }
 
     // Get current user to check blocked users
@@ -72,7 +81,13 @@ router.get('/', authenticate, validateQuery(searchOffersSchema), async (req, res
     }
 
     // Perform geospatial search
-    const offers = await Offer.findNearby(lng, lat, radiusKm, additionalFilters);
+    let offers = await Offer.findNearby(lng, lat, radiusKm, additionalFilters);
+
+    // Sort results
+    if (sort === 'date') {
+      offers.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    // Default 'distance' sort is already provided by findNearby
 
     // Pagination
     const skip = (page - 1) * limit;

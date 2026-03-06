@@ -55,7 +55,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['helper', 'requester', 'both'],
+    enum: ['helper', 'requester', 'both', 'admin'],
     default: null, // Will be set during role selection
   },
   isDeleted: {

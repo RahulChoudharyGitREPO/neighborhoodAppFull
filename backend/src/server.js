@@ -22,6 +22,9 @@ const offerRoutes = require('./routes/offer.routes');
 const matchRoutes = require('./routes/match.routes');
 const ratingRoutes = require('./routes/rating.routes');
 const deviceRoutes = require('./routes/device.routes');
+const adminRoutes = require('./routes/admin.routes');
+const favoriteRoutes = require('./routes/favorite.routes');
+const friendRoutes = require('./routes/friend.routes');
 
 // Initialize Express app
 const app = express();
@@ -97,6 +100,9 @@ app.use('/offers', offerRoutes);
 app.use('/matches', matchRoutes);
 app.use('/ratings', ratingRoutes);
 app.use('/devices', deviceRoutes);
+app.use('/admin', adminRoutes);
+app.use('/favorites', favoriteRoutes);
+app.use('/friends', friendRoutes);
 
 // Root route
 app.get('/', (req, res) => {

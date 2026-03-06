@@ -5,14 +5,18 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Camera, ArrowLeft, MapPin } from "lucide-react";
+import { Camera, ArrowLeft, MapPin, Star, Shield } from "lucide-react";
 import Button from "@/components/ui/button";
 import Input from "@/components/ui/input";
 import Textarea from "@/components/ui/textarea";
 import Avatar from "@/components/ui/avatar";
+import Toggle from "@/components/ui/toggle";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import api, { endpoints } from "@/lib/api";
 import { useUserStore } from "@/store/useUserStore";
+import { Rating } from "@/types";
+import RatingStars from "@/components/shared/rating-stars";
+import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 const profileSchema = z.object({
@@ -31,7 +35,14 @@ export default function ProfilePage() {
   const { user, setUser, isAuthenticated } = useUserStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isRefetchingLocation, setIsRefetchingLocation] = useState(false);
-  const [activeTab, setActiveTab] = useState<"profile" | "account" | "privacy">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "account" | "privacy" | "reviews">("profile");
+  const [ratings, setRatings] = useState<Rating[]>([]);
+  const [ratingsLoading, setRatingsLoading] = useState(false);
+  const [ratingsSummary, setRatingsSummary] = useState({ averageRating: 0, totalRatings: 0 });
+  const [ratingsPage, setRatingsPage] = useState(1);
+  const [hasMoreRatings, setHasMoreRatings] = useState(false);
+  const [maskLocation, setMaskLocation] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<Array<{ id: string; displayName: string; avatarUrl?: string }>>([]);
 
   const {
     register,
@@ -59,6 +70,76 @@ export default function ProfilePage() {
     // Fetch fresh user data
     fetchUserProfile();
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (activeTab === "reviews" && user) {
+      fetchRatings(1);
+    }
+    if (activeTab === "privacy" && user) {
+      fetchPrivacyData();
+    }
+  }, [activeTab]);
+
+  const fetchPrivacyData = async () => {
+    try {
+      const [profileRes, blockedRes] = await Promise.all([
+        api.get(endpoints.profile),
+        api.get(endpoints.blockedUsers),
+      ]);
+      const privacy = profileRes.data?.privacy || profileRes.data?.data?.privacy;
+      if (privacy) setMaskLocation(privacy.maskExactLocation || false);
+      setBlockedUsers(blockedRes.data?.blockedUsers || []);
+    } catch (error: any) {
+      console.error("Failed to fetch privacy data:", error);
+    }
+  };
+
+  const handleToggleMask = async (checked: boolean) => {
+    setMaskLocation(checked);
+    try {
+      await api.patch(endpoints.updatePrivacy, { maskExactLocation: checked });
+      toast.success("Privacy settings updated");
+    } catch (error: any) {
+      setMaskLocation(!checked);
+      toast.error("Failed to update privacy settings");
+    }
+  };
+
+  const handleUnblock = async (userId: string) => {
+    try {
+      await api.patch(endpoints.updatePrivacy, { unblockUserId: userId });
+      setBlockedUsers((prev) => prev.filter((u) => u.id !== userId));
+      toast.success("User unblocked");
+    } catch (error: any) {
+      toast.error("Failed to unblock user");
+    }
+  };
+
+  const fetchRatings = async (page: number) => {
+    const userId = user?._id || user?.id;
+    if (!userId) return;
+    setRatingsLoading(true);
+    try {
+      const response = await api.get(`${endpoints.userRatings(userId)}?page=${page}&limit=10`);
+      const data = response.data;
+      const ratingsData = data.ratings || data.data || [];
+      if (page === 1) {
+        setRatings(ratingsData);
+      } else {
+        setRatings((prev) => [...prev, ...ratingsData]);
+      }
+      setRatingsSummary({
+        averageRating: data.summary?.averageRating || data.averageRating || user?.rating || 0,
+        totalRatings: data.summary?.totalRatings || data.totalRatings || 0,
+      });
+      setHasMoreRatings(data.pagination?.hasMore || false);
+      setRatingsPage(page);
+    } catch (error: any) {
+      console.error("Failed to fetch ratings:", error);
+    } finally {
+      setRatingsLoading(false);
+    }
+  };
 
   const fetchUserProfile = async () => {
     try {
@@ -227,6 +308,16 @@ export default function ProfilePage() {
                   }`}
                 >
                   Privacy
+                </button>
+                <button
+                  onClick={() => setActiveTab("reviews")}
+                  className={`pb-3 border-b-2 transition-colors ${
+                    activeTab === "reviews"
+                      ? "border-gray-900 text-gray-900"
+                      : "border-transparent text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Reviews
                 </button>
               </div>
             </div>
@@ -404,14 +495,108 @@ export default function ProfilePage() {
 
             {/* Privacy Tab */}
             {activeTab === "privacy" && (
-              <div className="py-8 text-center">
-                <div className="p-3 bg-gray-100 rounded-full w-fit mx-auto mb-3">
-                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
+              <div className="space-y-6">
+                {/* Location Masking */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Mask Exact Location</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Show approximate area instead of exact address</p>
+                  </div>
+                  <Toggle checked={maskLocation} onChange={handleToggleMask} />
                 </div>
-                <p className="text-sm font-medium text-gray-700">Privacy Settings</p>
-                <p className="text-xs text-gray-400 mt-1">Coming soon. Your data is always secure.</p>
+
+                {/* Blocked Users */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="h-4 w-4 text-gray-600" />
+                    <h3 className="text-sm font-semibold text-gray-900">Blocked Users</h3>
+                  </div>
+                  {blockedUsers.length === 0 ? (
+                    <p className="text-xs text-gray-400 p-4 bg-gray-50 rounded-xl text-center">No blocked users</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {blockedUsers.map((u) => (
+                        <div key={u.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar src={u.avatarUrl} alt={u.displayName} fallback={u.displayName} size="sm" />
+                            <span className="text-sm text-gray-900">{u.displayName}</span>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => handleUnblock(u.id)}>
+                            Unblock
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Reviews Tab */}
+            {activeTab === "reviews" && (
+              <div className="space-y-6">
+                {/* Summary */}
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-gray-900">
+                      {ratingsSummary.averageRating.toFixed(1)}
+                    </p>
+                    <RatingStars rating={ratingsSummary.averageRating} size="sm" />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {ratingsSummary.totalRatings} review{ratingsSummary.totalRatings !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Reviews List */}
+                {ratingsLoading && ratings.length === 0 ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+                  </div>
+                ) : ratings.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Star className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No reviews yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {ratings.map((rating) => (
+                      <div key={rating.id || rating._id} className="p-4 border border-gray-200 rounded-xl">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Avatar
+                            src={rating.from?.avatarUrl}
+                            alt={rating.from?.displayName}
+                            fallback={rating.from?.displayName}
+                            size="sm"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">
+                              {rating.from?.displayName || "Anonymous"}
+                            </p>
+                            <p className="text-xs text-gray-500">{formatDate(rating.createdAt)}</p>
+                          </div>
+                          <RatingStars rating={rating.stars} size="sm" />
+                        </div>
+                        {rating.comment && (
+                          <p className="text-sm text-gray-700 mt-2">{rating.comment}</p>
+                        )}
+                      </div>
+                    ))}
+
+                    {hasMoreRatings && (
+                      <div className="text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fetchRatings(ratingsPage + 1)}
+                          isLoading={ratingsLoading}
+                        >
+                          Load More
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

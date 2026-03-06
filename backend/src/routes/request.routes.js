@@ -54,17 +54,53 @@ router.post('/', authenticate, validate(createRequestSchema), async (req, res, n
 });
 
 /**
+ * GET /requests/mine
+ * Get current user's own requests (no location required)
+ */
+router.get('/mine', authenticate, async (req, res, next) => {
+  try {
+    const filter = { userId: req.user.userId };
+    if (req.query.status) filter.status = req.query.status;
+
+    const requests = await Request.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const results = requests.map((r) => ({
+      id: r._id,
+      _id: r._id,
+      title: r.title,
+      details: r.details,
+      category: r.category,
+      status: r.status,
+      whenTime: r.whenTime,
+      createdAt: r.createdAt,
+    }));
+
+    res.json({ requests: results });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /requests
  * Search requests with geospatial filtering
  */
 router.get('/', authenticate, validateQuery(searchRequestsSchema), async (req, res, next) => {
   try {
-    const { lng, lat, radiusKm, category, page, limit } = req.query;
+    const { lng, lat, radiusKm, category, search, sort, page, limit } = req.query;
 
     // Build additional filters
     const additionalFilters = {};
     if (category) {
       additionalFilters.category = category;
+    }
+    if (search) {
+      additionalFilters.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { details: { $regex: search, $options: 'i' } },
+      ];
     }
 
     // Only show open requests by default (can be overridden with status query param)
@@ -80,7 +116,15 @@ router.get('/', authenticate, validateQuery(searchRequestsSchema), async (req, r
     }
 
     // Perform geospatial search
-    const requests = await Request.findNearby(lng, lat, radiusKm, additionalFilters);
+    let requests = await Request.findNearby(lng, lat, radiusKm, additionalFilters);
+
+    // Sort results
+    if (sort === 'date') {
+      requests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    } else if (sort === 'urgency') {
+      requests.sort((a, b) => new Date(a.whenTime) - new Date(b.whenTime));
+    }
+    // Default 'distance' sort is already provided by findNearby
 
     // Pagination
     const skip = (page - 1) * limit;

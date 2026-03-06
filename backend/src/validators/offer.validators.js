@@ -26,6 +26,9 @@ const searchOffersSchema = Joi.object({
   lat: Joi.number().min(-90).max(90).required(),
   radiusKm: Joi.number().min(0.5).max(50000).default(2.5),
   skill: Joi.string().trim().max(50),
+  skills: Joi.alternatives().try(Joi.string().trim().max(50), Joi.array().items(Joi.string().trim().max(50))),
+  search: Joi.string().trim().max(200),
+  sort: Joi.string().valid('distance', 'date', 'rating').default('distance'),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
 });
