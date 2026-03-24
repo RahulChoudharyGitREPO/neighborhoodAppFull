@@ -141,7 +141,7 @@ export default function MapPage() {
     }
   }, [isAuthenticated, user, isHydrated, router]);
 
-  // Re-fetch and re-render markers when activeView changes (for "both" role)
+  // Re-fetch and re-render markers when data, map, or view changes
   useEffect(() => {
     if (!map || !user) return;
     if (showHelpers && offers.length > 0) {
@@ -149,7 +149,7 @@ export default function MapPage() {
     } else if (showRequests && requests.length > 0) {
       addRequestMarkers(requests);
     }
-  }, [activeView, map]);
+  }, [activeView, map, requests, offers, showHelpers, showRequests]);
 
   const initializeMap = async () => {
     if (!user?.home) return;
