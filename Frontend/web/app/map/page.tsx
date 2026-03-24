@@ -14,7 +14,6 @@ import { Request, Offer } from "@/types";
 import toast from "react-hot-toast";
 import "leaflet/dist/leaflet.css";
 
-// Fix Leaflet icon issue
 if (typeof window !== "undefined") {
   const L = require("leaflet");
   delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -25,7 +24,6 @@ if (typeof window !== "undefined") {
   });
 }
 
-// Category color map for visual differentiation
 const categoryColors: Record<string, { border: string; bg: string; text: string; dot: string }> = {
   grocery:   { border: "border-l-green-500",  bg: "bg-green-50",  text: "text-green-700",  dot: "#22C55E" },
   medical:   { border: "border-l-red-500",    bg: "bg-red-50",    text: "text-red-700",    dot: "#EF4444" },
@@ -42,7 +40,6 @@ const categoryColors: Record<string, { border: string; bg: string; text: string;
 const getCategoryColor = (category: string) =>
   categoryColors[category?.toLowerCase()] || categoryColors.other;
 
-// Rotating colors for helper avatar badges
 const avatarBadgeColors = [
   { ring: "ring-indigo-400", bg: "bg-indigo-100", border: "border-indigo-300" },
   { ring: "ring-rose-400", bg: "bg-rose-100", border: "border-rose-300" },
@@ -67,9 +64,7 @@ export default function MapPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [map, setMap] = useState<any>(null);
   const markersRef = useRef<any[]>([]);
-  // For "both" role: which tab is active
   const [activeView, setActiveView] = useState<"helpers" | "requests">("helpers");
-  // Search/filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [sortBy, setSortBy] = useState("distance");
@@ -77,16 +72,13 @@ export default function MapPage() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   const userRole = user?.role;
-  // Determine what to show based on role
   const showHelpers = userRole === "requester" || (userRole === "both" && activeView === "helpers");
   const showRequests = userRole === "helper" || (userRole === "both" && activeView === "requests");
 
-  // Wait for Zustand hydration
   useEffect(() => {
     setIsHydrated(true);
   }, []);
 
-  // Fetch user's favorites to show heart state
   useEffect(() => {
     if (isAuthenticated) {
       api.get(endpoints.favorites).then((res) => {
@@ -104,7 +96,7 @@ export default function MapPage() {
   const favLockRef = useRef<Set<string>>(new Set());
   const toggleFavorite = async (e: React.MouseEvent, itemId: string, type: "request" | "offer") => {
     e.stopPropagation();
-    if (favLockRef.current.has(itemId)) return; // prevent duplicate calls
+    if (favLockRef.current.has(itemId)) return; 
     favLockRef.current.add(itemId);
     try {
       const body = type === "request" ? { requestId: itemId } : { offerId: itemId };
@@ -141,7 +133,6 @@ export default function MapPage() {
     }
   }, [isAuthenticated, user, isHydrated, router]);
 
-  // Re-fetch and re-render markers when data, map, or view changes
   useEffect(() => {
     if (!map || !user) return;
     if (showHelpers && offers.length > 0) {
@@ -172,7 +163,6 @@ export default function MapPage() {
         maxZoom: 19,
       }).addTo(leafletMap);
 
-      // User location marker — black with pulse ring
       const userIcon = L.divIcon({
         className: "custom-user-marker",
         html: `<div style="position:relative;">
@@ -207,13 +197,10 @@ export default function MapPage() {
       const { lng, lat } = userHome;
 
       if (userRole === "requester") {
-        // Requester sees helpers (offers)
         await fetchOffers(lng, lat);
       } else if (userRole === "helper") {
-        // Helper sees requests
         await fetchRequests(lng, lat);
       } else {
-        // "both" — fetch both
         await Promise.all([fetchOffers(lng, lat), fetchRequests(lng, lat)]);
       }
     } catch (error: any) {
@@ -247,7 +234,6 @@ export default function MapPage() {
     }
   };
 
-  // Re-fetch when filters change (debounced for search)
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -337,7 +323,6 @@ export default function MapPage() {
     });
   };
 
-  // Invalidate map size when sidebar toggles
   useEffect(() => {
     if (map) {
       setTimeout(() => map.invalidateSize(), 300);
@@ -361,13 +346,11 @@ export default function MapPage() {
     return `${Math.round(meters)}m`;
   };
 
-  // availability can be a string or an object — only render if it's a non-empty string
   const getAvailability = (val: any): string | null => {
     if (typeof val === "string" && val.trim()) return val;
     return null;
   };
 
-  // Show loading while hydrating
   if (!isHydrated || (!isAuthenticated && !user)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -378,13 +361,10 @@ export default function MapPage() {
 
   return (
     <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden">
-      {/* Leaflet Map */}
       <div id="map" className="w-full h-full bg-gray-100" />
 
-      {/* ── Floating Avatar Badges (Helpers view) ── */}
       {showHelpers && offers.length > 0 && (
         <div className="absolute top-3 left-3 right-3 z-10 flex items-center gap-2.5 flex-wrap">
-          {/* Label pill */}
           <div className="bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md border border-gray-200/60 flex items-center gap-1.5">
             <HandHelping className="h-4 w-4 text-indigo-600" />
             <span className="text-xs font-bold text-gray-800">Helpers</span>
@@ -393,7 +373,6 @@ export default function MapPage() {
             </span>
           </div>
 
-          {/* Tabs for "both" role */}
           {userRole === "both" && (
             <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-md border border-gray-200/60 flex p-0.5">
               <button
@@ -421,7 +400,6 @@ export default function MapPage() {
             </div>
           )}
 
-          {/* Avatar badges */}
           {offers.map((offer, index) => {
             const offerId = offer.id || offer._id;
             const offerUser = offer.user || (typeof offer.userId === "object" ? offer.userId as any : null);
@@ -455,7 +433,6 @@ export default function MapPage() {
                   )}
                 </button>
 
-                {/* Hover popover card */}
                 <div className="absolute top-full left-0 mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none group-hover:pointer-events-auto z-30">
                   <div className="bg-white rounded-xl shadow-2xl p-3 w-52 border border-gray-200">
                     <p className="font-semibold text-sm text-gray-900 truncate mb-1">{helperName}</p>
@@ -501,7 +478,6 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* ── Mobile sidebar toggle (requests view only) ── */}
       {showRequests && requests.length > 0 && !sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
@@ -512,7 +488,6 @@ export default function MapPage() {
         </button>
       )}
 
-      {/* ── Sidebar (Requests view only) ── */}
       {showRequests && requests.length > 0 && (
         <div
           className={cn(
@@ -520,7 +495,6 @@ export default function MapPage() {
             sidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+2rem)] md:translate-x-0"
           )}
         >
-          {/* Header */}
           <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-100 to-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -540,7 +514,6 @@ export default function MapPage() {
               </button>
             </div>
 
-            {/* Tabs for "both" role */}
             {userRole === "both" && (
               <div className="flex mt-2.5 bg-gray-100 rounded-lg p-0.5">
                 <button
@@ -568,7 +541,6 @@ export default function MapPage() {
               </div>
             )}
 
-            {/* Search & Filters */}
             <SearchFilters
               viewType="requests"
               onSearch={handleSearchChange}
@@ -578,7 +550,6 @@ export default function MapPage() {
             />
           </div>
 
-          {/* Request Cards */}
           <div className="overflow-y-auto h-[calc(100%-56px)] p-2.5 space-y-2">
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
@@ -683,7 +654,6 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Floating Action Button — role-based */}
       {(userRole === "requester" || userRole === "both") && (
         <button
           onClick={handleCreateRequest}
@@ -707,7 +677,6 @@ export default function MapPage() {
         </button>
       )}
 
-      {/* Bottom Sheet for Selected Offer (helper) */}
       {showBottomSheet && selectedOffer && (() => {
         const sheetUser = selectedOffer.user || (typeof selectedOffer.userId === "object" ? selectedOffer.userId as any : null);
 
@@ -716,7 +685,6 @@ export default function MapPage() {
             <div className="max-h-[65vh] overflow-y-auto p-6">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5" />
 
-              {/* Header */}
               <div className="flex justify-between items-start gap-3 mb-4">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <Avatar
@@ -755,7 +723,6 @@ export default function MapPage() {
                 </div>
               </div>
 
-              {/* Skills */}
               {selectedOffer.skills && selectedOffer.skills.length > 0 && (
                 <div className="mb-4">
                   <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Skills</p>
@@ -770,7 +737,6 @@ export default function MapPage() {
                 </div>
               )}
 
-              {/* Meta info */}
               <div className="flex flex-wrap gap-3 mb-4">
                 {selectedOffer.distance !== undefined && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 rounded-lg">
@@ -786,7 +752,6 @@ export default function MapPage() {
                 )}
               </div>
 
-              {/* Action buttons */}
               <div className="flex gap-3 pt-2 border-t border-gray-100 mt-2">
                 <Button
                   variant="outline"
@@ -810,7 +775,6 @@ export default function MapPage() {
         );
       })()}
 
-      {/* Bottom Sheet for Selected Request */}
       {showBottomSheet && selectedRequest && (() => {
         const colors = getCategoryColor(selectedRequest.category);
         const sheetUser = selectedRequest.user || (typeof selectedRequest.userId === "object" ? selectedRequest.userId as any : null);
@@ -926,7 +890,6 @@ export default function MapPage() {
         );
       })()}
 
-      {/* Loading Overlay */}
       {isLoading && offers.length === 0 && requests.length === 0 && (
         <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] flex items-center justify-center z-30">
           <div className="bg-white rounded-2xl p-6 shadow-2xl text-center">
