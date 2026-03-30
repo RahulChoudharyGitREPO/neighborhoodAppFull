@@ -19,7 +19,6 @@ api.interceptors.request.use(
     // Try to get token from localStorage (fallback if cookies don't work)
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("auth_token");
-      console.log(`[API] ${config.method?.toUpperCase()} ${config.url} - Token:`, token ? "present" : "missing");
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
         console.log("[API] Authorization header set");
@@ -50,9 +49,9 @@ api.interceptors.response.use(
         // Don't redirect for permission errors (user is logged in but not authorized for specific resource)
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
         const isAuthError = data?.message?.toLowerCase().includes("token") ||
-                           data?.error?.toLowerCase().includes("token") ||
-                           data?.message?.toLowerCase().includes("authentication") ||
-                           !token;
+          data?.error?.toLowerCase().includes("token") ||
+          data?.message?.toLowerCase().includes("authentication") ||
+          !token;
 
         if (isAuthError && typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
           console.log("[API] Authentication error, redirecting to login");
